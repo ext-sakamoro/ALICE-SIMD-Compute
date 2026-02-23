@@ -1,5 +1,5 @@
 global:
-  domain: simd-compute.alice-platform.com
+  domain: simd-compute.alicelaw.net
 frontend:
   replicas: 2
   image: simd-compute/frontend:latest
