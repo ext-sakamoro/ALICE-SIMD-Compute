@@ -1,0 +1,6 @@
+apiVersion: v2
+name: simd-compute
+description: ALICE SIMD Compute
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
