@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "alice-simd"
+version = "1.0.0"
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -638,6 +642,7 @@ dependencies = [
 name = "simd-engine"
 version = "0.1.0"
 dependencies = [
+ "alice-simd",
  "axum",
  "serde",
  "serde_json",
