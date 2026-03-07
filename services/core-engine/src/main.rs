@@ -196,6 +196,7 @@ async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>
     })
 }
 
+#[allow(clippy::needless_range_loop)]
 async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) -> Json<MatrixResponse> {
     let t = Instant::now();
     let a = &req.matrix_a;
@@ -223,6 +224,7 @@ async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) 
         }
         "transpose" => {
             let mut result = vec![vec![0.0f64; rows_a]; cols_a];
+            #[allow(clippy::needless_range_loop)]
             for i in 0..rows_a {
                 for j in 0..cols_a {
                     result[j][i] = a[i][j];
@@ -246,10 +248,10 @@ async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) 
         "add" => {
             let b = req.matrix_b.as_deref().unwrap_or(&[]);
             let mut result = a.clone();
-            for i in 0..rows_a {
-                for j in 0..cols_a {
+            for (i, row) in result.iter_mut().enumerate().take(rows_a) {
+                for (j, cell) in row.iter_mut().enumerate().take(cols_a) {
                     let bval = b.get(i).and_then(|r| r.get(j)).copied().unwrap_or(0.0);
-                    result[i][j] += bval;
+                    *cell += bval;
                 }
             }
             let json = mat_to_json(&result);
@@ -390,6 +392,7 @@ fn matrix_determinant(m: &[Vec<f64>]) -> f64 {
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn matrix_inverse(m: &[Vec<f64>], n: usize) -> Vec<Vec<f64>> {
     let det = matrix_determinant(m);
     if det.abs() < 1e-15 {
@@ -406,6 +409,7 @@ fn matrix_inverse(m: &[Vec<f64>], n: usize) -> Vec<Vec<f64>> {
         _ => {
             // Adjugate method
             let mut adj = vec![vec![0.0; n]; n];
+            #[allow(clippy::needless_range_loop)]
             for i in 0..n {
                 for j in 0..n {
                     let minor: Vec<Vec<f64>> = (0..n).filter(|&r| r != i)
