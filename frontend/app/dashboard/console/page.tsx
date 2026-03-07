@@ -158,7 +158,7 @@ export default function ConsolePage() {
           </button>
           {result && !('error' in result) && (
             <div className="border border-border rounded-lg p-4 space-y-3">
-              {result.simd_capability && <Stat label="SIMD" value={String(result.simd_capability)} accent />}
+              {result.simd_capability != null && (<Stat label="SIMD" value={String(result.simd_capability)} accent />)}
               {Array.isArray(result.benchmarks) && (
                 <table className="w-full text-sm">
                   <thead><tr className="text-left text-muted-foreground border-b border-border">
