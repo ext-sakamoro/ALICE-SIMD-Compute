@@ -1,5 +1,10 @@
 #![allow(dead_code)]
-use axum::{extract::State, response::Json, routing::{get, post}, Router};
+use axum::{
+    extract::State,
+    response::Json,
+    routing::{get, post},
+    Router,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -20,7 +25,12 @@ struct Stats {
 
 // ── Types ───────────────────────────────────────────────────
 #[derive(Serialize)]
-struct Health { status: String, version: String, uptime_secs: u64, total_ops: u64 }
+struct Health {
+    status: String,
+    version: String,
+    uptime_secs: u64,
+    total_ops: u64,
+}
 
 // Compute
 #[derive(Deserialize)]
@@ -32,8 +42,13 @@ struct ComputeRequest {
 }
 #[derive(Serialize)]
 struct ComputeResponse {
-    operation: String, result: serde_json::Value, scalar_result: Option<f64>,
-    input_size: usize, simd_lanes_used: u32, elapsed_ns: u128, throughput_gflops: f64,
+    operation: String,
+    result: serde_json::Value,
+    scalar_result: Option<f64>,
+    input_size: usize,
+    simd_lanes_used: u32,
+    elapsed_ns: u128,
+    throughput_gflops: f64,
 }
 
 // Matrix
@@ -46,43 +61,72 @@ struct MatrixRequest {
 }
 #[derive(Serialize)]
 struct MatrixResponse {
-    operation: String, result: serde_json::Value, scalar_result: Option<f64>,
-    dimensions: String, elapsed_ns: u128,
+    operation: String,
+    result: serde_json::Value,
+    scalar_result: Option<f64>,
+    dimensions: String,
+    elapsed_ns: u128,
 }
 
 // Benchmark
 #[derive(Deserialize)]
-struct BenchmarkRequest { size: Option<usize>, iterations: Option<usize> }
+struct BenchmarkRequest {
+    size: Option<usize>,
+    iterations: Option<usize>,
+}
 #[derive(Serialize)]
-struct BenchmarkResponse { simd_capability: String, benchmarks: Vec<BenchmarkResult> }
+struct BenchmarkResponse {
+    simd_capability: String,
+    benchmarks: Vec<BenchmarkResult>,
+}
 #[derive(Serialize)]
 struct BenchmarkResult {
-    operation: String, size: usize, iterations: usize,
-    total_ns: u128, per_op_ns: u128, throughput_gflops: f64,
+    operation: String,
+    size: usize,
+    iterations: usize,
+    total_ns: u128,
+    per_op_ns: u128,
+    throughput_gflops: f64,
 }
 
 // Capabilities
 #[derive(Serialize)]
 struct Capabilities {
-    arch: String, simd_width: u32, max_vector_size: u32,
-    features: Vec<String>, supported_types: Vec<String>,
+    arch: String,
+    simd_width: u32,
+    max_vector_size: u32,
+    features: Vec<String>,
+    supported_types: Vec<String>,
 }
 
 #[derive(Serialize)]
-struct StatsResponse { total_computes: u64, total_matrix_ops: u64, total_benchmarks: u64 }
+struct StatsResponse {
+    total_computes: u64,
+    total_matrix_ops: u64,
+    total_benchmarks: u64,
+}
 
 // ── Main ────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "simd_engine=info".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "simd_engine=info".into()),
+        )
         .init();
     let state = Arc::new(AppState {
         start_time: Instant::now(),
-        stats: Mutex::new(Stats { total_computes: 0, total_matrix_ops: 0, total_benchmarks: 0 }),
+        stats: Mutex::new(Stats {
+            total_computes: 0,
+            total_matrix_ops: 0,
+            total_benchmarks: 0,
+        }),
     });
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/v1/simd/compute", post(compute))
@@ -90,7 +134,9 @@ async fn main() {
         .route("/api/v1/simd/benchmark", post(benchmark))
         .route("/api/v1/simd/capabilities", get(capabilities))
         .route("/api/v1/simd/stats", get(stats))
-        .layer(cors).layer(TraceLayer::new_for_http()).with_state(state);
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
     let addr = std::env::var("SIMD_ADDR").unwrap_or_else(|_| "0.0.0.0:8081".into());
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     tracing::info!("SIMD Compute Engine on {addr}");
@@ -101,13 +147,17 @@ async fn main() {
 async fn health(State(s): State<Arc<AppState>>) -> Json<Health> {
     let st = s.stats.lock().unwrap();
     Json(Health {
-        status: "ok".into(), version: env!("CARGO_PKG_VERSION").into(),
+        status: "ok".into(),
+        version: env!("CARGO_PKG_VERSION").into(),
         uptime_secs: s.start_time.elapsed().as_secs(),
         total_ops: st.total_computes + st.total_matrix_ops,
     })
 }
 
-async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>) -> Json<ComputeResponse> {
+async fn compute(
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<ComputeRequest>,
+) -> Json<ComputeResponse> {
     let t = Instant::now();
     let a = &req.data_a;
     let b = req.data_b.as_deref().unwrap_or(&[]);
@@ -117,26 +167,39 @@ async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>
     // Simulate SIMD lane width based on architecture
     let simd_lanes: u32 = if cfg!(target_arch = "x86_64") { 8 } else { 4 };
 
-    let (result_vec, scalar_result): (Option<Vec<f64>>, Option<f64>) = match req.operation.as_str() {
+    let (result_vec, scalar_result): (Option<Vec<f64>>, Option<f64>) = match req.operation.as_str()
+    {
         "add" => {
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&0.0)))
-                .map(|(x, y)| x + y).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&0.0)))
+                .map(|(x, y)| x + y)
+                .collect();
             (Some(r), None)
         }
         "mul" => {
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&1.0)))
-                .map(|(x, y)| x * y).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&1.0)))
+                .map(|(x, y)| x * y)
+                .collect();
             (Some(r), None)
         }
         "fma" => {
             // fused multiply-add: a * b + scalar
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&0.0)))
-                .map(|(x, y)| x.mul_add(*y, scalar)).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&0.0)))
+                .map(|(x, y)| x.mul_add(*y, scalar))
+                .collect();
             (Some(r), None)
         }
         "dot_product" => {
-            let dp: f64 = a.iter().zip(b.iter().chain(std::iter::repeat(&0.0)))
-                .map(|(x, y)| x * y).sum();
+            let dp: f64 = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&0.0)))
+                .map(|(x, y)| x * y)
+                .sum();
             (None, Some(dp))
         }
         "normalize" => {
@@ -155,24 +218,37 @@ async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>
             (Some(r), None)
         }
         "distance" => {
-            let d: f64 = a.iter().zip(b.iter().chain(std::iter::repeat(&0.0)))
-                .map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt();
+            let d: f64 = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&0.0)))
+                .map(|(x, y)| (x - y).powi(2))
+                .sum::<f64>()
+                .sqrt();
             (None, Some(d))
         }
         "lerp" => {
             let t_val = scalar.clamp(0.0, 1.0);
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&0.0)))
-                .map(|(x, y)| x + (y - x) * t_val).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&0.0)))
+                .map(|(x, y)| x + (y - x) * t_val)
+                .collect();
             (Some(r), None)
         }
         "min" => {
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&f64::MAX)))
-                .map(|(x, y)| x.min(*y)).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&f64::MAX)))
+                .map(|(x, y)| x.min(*y))
+                .collect();
             (Some(r), None)
         }
         "max" => {
-            let r: Vec<f64> = a.iter().zip(b.iter().chain(std::iter::repeat(&f64::MIN)))
-                .map(|(x, y)| x.max(*y)).collect();
+            let r: Vec<f64> = a
+                .iter()
+                .zip(b.iter().chain(std::iter::repeat(&f64::MIN)))
+                .map(|(x, y)| x.max(*y))
+                .collect();
             (Some(r), None)
         }
         _ => (Some(a.clone()), None),
@@ -180,7 +256,11 @@ async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>
 
     let elapsed_ns = t.elapsed().as_nanos();
     let flops = n.max(1) as f64;
-    let throughput = if elapsed_ns > 0 { flops / elapsed_ns as f64 } else { 0.0 };
+    let throughput = if elapsed_ns > 0 {
+        flops / elapsed_ns as f64
+    } else {
+        0.0
+    };
 
     s.stats.lock().unwrap().total_computes += 1;
 
@@ -191,13 +271,21 @@ async fn compute(State(s): State<Arc<AppState>>, Json(req): Json<ComputeRequest>
     };
 
     Json(ComputeResponse {
-        operation: req.operation, result: result_json, scalar_result,
-        input_size: n, simd_lanes_used: simd_lanes, elapsed_ns, throughput_gflops: throughput,
+        operation: req.operation,
+        result: result_json,
+        scalar_result,
+        input_size: n,
+        simd_lanes_used: simd_lanes,
+        elapsed_ns,
+        throughput_gflops: throughput,
     })
 }
 
 #[allow(clippy::needless_range_loop)]
-async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) -> Json<MatrixResponse> {
+async fn matrix(
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<MatrixRequest>,
+) -> Json<MatrixResponse> {
     let t = Instant::now();
     let a = &req.matrix_a;
     let rows_a = a.len();
@@ -231,11 +319,19 @@ async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) 
                 }
             }
             let json = mat_to_json(&result);
-            (json, None, format!("{rows_a}x{cols_a} -> {cols_a}x{rows_a}"))
+            (
+                json,
+                None,
+                format!("{rows_a}x{cols_a} -> {cols_a}x{rows_a}"),
+            )
         }
         "determinant" => {
             let det = matrix_determinant(a);
-            (serde_json::Value::Null, Some(det), format!("{rows_a}x{cols_a}"))
+            (
+                serde_json::Value::Null,
+                Some(det),
+                format!("{rows_a}x{cols_a}"),
+            )
         }
         "inverse" => {
             if rows_a == cols_a && rows_a <= 4 {
@@ -258,8 +354,10 @@ async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) 
             (json, None, format!("{rows_a}x{cols_a}"))
         }
         "scale" => {
-            let result: Vec<Vec<f64>> = a.iter()
-                .map(|row| row.iter().map(|v| v * scalar).collect()).collect();
+            let result: Vec<Vec<f64>> = a
+                .iter()
+                .map(|row| row.iter().map(|v| v * scalar).collect())
+                .collect();
             let json = mat_to_json(&result);
             (json, None, format!("{rows_a}x{cols_a}"))
         }
@@ -270,12 +368,18 @@ async fn matrix(State(s): State<Arc<AppState>>, Json(req): Json<MatrixRequest>) 
     s.stats.lock().unwrap().total_matrix_ops += 1;
 
     Json(MatrixResponse {
-        operation: req.operation, result: result_json, scalar_result,
-        dimensions: dims, elapsed_ns,
+        operation: req.operation,
+        result: result_json,
+        scalar_result,
+        dimensions: dims,
+        elapsed_ns,
     })
 }
 
-async fn benchmark(State(s): State<Arc<AppState>>, Json(req): Json<BenchmarkRequest>) -> Json<BenchmarkResponse> {
+async fn benchmark(
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<BenchmarkRequest>,
+) -> Json<BenchmarkResponse> {
     let size = req.size.unwrap_or(10000);
     let iterations = req.iterations.unwrap_or(100);
 
@@ -285,7 +389,8 @@ async fn benchmark(State(s): State<Arc<AppState>>, Json(req): Json<BenchmarkRequ
         "NEON (128-bit, 4x f32)"
     } else {
         "Scalar"
-    }.to_string();
+    }
+    .to_string();
 
     let ops = ["add", "mul", "fma", "dot_product", "normalize"];
     let mut benchmarks = Vec::with_capacity(ops.len());
@@ -298,10 +403,30 @@ async fn benchmark(State(s): State<Arc<AppState>>, Json(req): Json<BenchmarkRequ
         let t = Instant::now();
         for _ in 0..iterations {
             match *op {
-                "add" => { let _: Vec<f64> = data_a.iter().zip(data_b.iter()).map(|(a, b)| a + b).collect(); }
-                "mul" => { let _: Vec<f64> = data_a.iter().zip(data_b.iter()).map(|(a, b)| a * b).collect(); }
-                "fma" => { let _: Vec<f64> = data_a.iter().zip(data_b.iter()).map(|(a, b)| a.mul_add(*b, 1.0)).collect(); }
-                "dot_product" => { let _: f64 = data_a.iter().zip(data_b.iter()).map(|(a, b)| a * b).sum(); }
+                "add" => {
+                    let _: Vec<f64> = data_a
+                        .iter()
+                        .zip(data_b.iter())
+                        .map(|(a, b)| a + b)
+                        .collect();
+                }
+                "mul" => {
+                    let _: Vec<f64> = data_a
+                        .iter()
+                        .zip(data_b.iter())
+                        .map(|(a, b)| a * b)
+                        .collect();
+                }
+                "fma" => {
+                    let _: Vec<f64> = data_a
+                        .iter()
+                        .zip(data_b.iter())
+                        .map(|(a, b)| a.mul_add(*b, 1.0))
+                        .collect();
+                }
+                "dot_product" => {
+                    let _: f64 = data_a.iter().zip(data_b.iter()).map(|(a, b)| a * b).sum();
+                }
                 "normalize" => {
                     let mag = data_a.iter().map(|x| x * x).sum::<f64>().sqrt();
                     let _: Vec<f64> = data_a.iter().map(|x| x / mag).collect();
@@ -312,38 +437,75 @@ async fn benchmark(State(s): State<Arc<AppState>>, Json(req): Json<BenchmarkRequ
         let total_ns = t.elapsed().as_nanos();
         let per_op = total_ns / iterations as u128;
         let flops = (size * iterations) as f64;
-        let throughput = if total_ns > 0 { flops / total_ns as f64 } else { 0.0 };
+        let throughput = if total_ns > 0 {
+            flops / total_ns as f64
+        } else {
+            0.0
+        };
 
         benchmarks.push(BenchmarkResult {
-            operation: op.to_string(), size, iterations,
-            total_ns, per_op_ns: per_op, throughput_gflops: throughput,
+            operation: op.to_string(),
+            size,
+            iterations,
+            total_ns,
+            per_op_ns: per_op,
+            throughput_gflops: throughput,
         });
     }
 
     s.stats.lock().unwrap().total_benchmarks += 1;
 
-    Json(BenchmarkResponse { simd_capability: simd_cap, benchmarks })
+    Json(BenchmarkResponse {
+        simd_capability: simd_cap,
+        benchmarks,
+    })
 }
 
 async fn capabilities() -> Json<Capabilities> {
     let (arch, simd_width, max_vec, features) = if cfg!(target_arch = "x86_64") {
-        ("x86_64".into(), 8u32, 256u32, vec![
-            "SSE2".into(), "SSE4.1".into(), "SSE4.2".into(),
-            "AVX".into(), "AVX2".into(), "FMA".into(), "POPCNT".into(),
-        ])
+        (
+            "x86_64".into(),
+            8u32,
+            256u32,
+            vec![
+                "SSE2".into(),
+                "SSE4.1".into(),
+                "SSE4.2".into(),
+                "AVX".into(),
+                "AVX2".into(),
+                "FMA".into(),
+                "POPCNT".into(),
+            ],
+        )
     } else if cfg!(target_arch = "aarch64") {
-        ("aarch64".into(), 4u32, 128u32, vec![
-            "NEON".into(), "ASIMD".into(), "FP16".into(), "DOTPROD".into(),
-        ])
+        (
+            "aarch64".into(),
+            4u32,
+            128u32,
+            vec![
+                "NEON".into(),
+                "ASIMD".into(),
+                "FP16".into(),
+                "DOTPROD".into(),
+            ],
+        )
     } else {
         ("unknown".into(), 1, 64, vec!["scalar".into()])
     };
 
     Json(Capabilities {
-        arch, simd_width, max_vector_size: max_vec, features,
+        arch,
+        simd_width,
+        max_vector_size: max_vec,
+        features,
         supported_types: vec![
-            "f32".into(), "f64".into(), "i32".into(), "i64".into(),
-            "u32".into(), "u64".into(), "f16 (emulated)".into(),
+            "f32".into(),
+            "f64".into(),
+            "i32".into(),
+            "i64".into(),
+            "u32".into(),
+            "u64".into(),
+            "f16 (emulated)".into(),
         ],
     })
 }
@@ -360,9 +522,11 @@ async fn stats(State(s): State<Arc<AppState>>) -> Json<StatsResponse> {
 // ── Helpers ─────────────────────────────────────────────────
 fn mat_to_json(mat: &[Vec<f64>]) -> serde_json::Value {
     serde_json::Value::Array(
-        mat.iter().map(|row|
-            serde_json::Value::Array(row.iter().map(|v| serde_json::Value::from(*v)).collect())
-        ).collect()
+        mat.iter()
+            .map(|row| {
+                serde_json::Value::Array(row.iter().map(|v| serde_json::Value::from(*v)).collect())
+            })
+            .collect(),
     )
 }
 
@@ -374,16 +538,16 @@ fn matrix_determinant(m: &[Vec<f64>]) -> f64 {
         2 => m[0][0] * m[1][1] - m[0][1] * m[1][0],
         3 => {
             m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+                - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
         }
         _ => {
             // Cofactor expansion along first row
             let mut det = 0.0;
             for j in 0..n {
-                let minor: Vec<Vec<f64>> = (1..n).map(|i|
-                    (0..n).filter(|&k| k != j).map(|k| m[i][k]).collect()
-                ).collect();
+                let minor: Vec<Vec<f64>> = (1..n)
+                    .map(|i| (0..n).filter(|&k| k != j).map(|k| m[i][k]).collect())
+                    .collect();
                 let sign = if j % 2 == 0 { 1.0 } else { -1.0 };
                 det += sign * m[0][j] * matrix_determinant(&minor);
             }
@@ -412,7 +576,8 @@ fn matrix_inverse(m: &[Vec<f64>], n: usize) -> Vec<Vec<f64>> {
             #[allow(clippy::needless_range_loop)]
             for i in 0..n {
                 for j in 0..n {
-                    let minor: Vec<Vec<f64>> = (0..n).filter(|&r| r != i)
+                    let minor: Vec<Vec<f64>> = (0..n)
+                        .filter(|&r| r != i)
                         .map(|r| (0..n).filter(|&c| c != j).map(|c| m[r][c]).collect())
                         .collect();
                     let sign = if (i + j) % 2 == 0 { 1.0 } else { -1.0 };
