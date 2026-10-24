@@ -200,4 +200,6 @@ npm run dev
 
 ## License
 
-AGPL-3.0 — See [LICENSE](LICENSE) for details.
+`LicenseRef-Proprietary`. The text is [LICENSE-Proprietary](LICENSE-Proprietary).
+
+Enquiries: https://extoria.co.jp/
